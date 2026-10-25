@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { CalendarDays, Clock, MapPin, XCircle, RefreshCw, Utensils } from 'lucide-react';
+import { CalendarDays, Clock, MapPin, XCircle, RefreshCw, Utensils, AlertTriangle, X } from 'lucide-react';
 
 interface Booking {
   id: number;
@@ -20,7 +20,11 @@ export const BookingsPage: React.FC = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [cancelingId, setCancelingId] = useState<number | null>(null);
+
+  // Custom Cancellation Modal State
+  const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
+  const [isCanceling, setIsCanceling] = useState(false);
+  const [cancelFeedback, setCancelFeedback] = useState<string | null>(null);
 
   const fetchBookings = async () => {
     setLoading(true);
@@ -51,21 +55,19 @@ export const BookingsPage: React.FC = () => {
     }
   }, [user, authLoading]);
 
-  const handleCancel = async (booking: Booking) => {
-    const confirmCancel = window.confirm(
-      `Cancel your table at ${booking.restaurant_name} (${booking.floor_name} - ${booking.table_label}) on ${booking.date} at ${booking.time_slot}?`
-    );
-    if (!confirmCancel) return;
-
-    setCancelingId(booking.id);
+  const confirmCancel = async () => {
+    if (!bookingToCancel) return;
+    setIsCanceling(true);
     try {
-      const res = await fetch(`/api/bookings/${booking.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/bookings/${bookingToCancel.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Cancellation failed');
-      setBookings((prev) => prev.filter((b) => b.id !== booking.id));
+      setBookings((prev) => prev.filter((b) => b.id !== bookingToCancel.id));
+      setCancelFeedback(`Reservation at ${bookingToCancel.restaurant_name} (${bookingToCancel.table_label}) has been cancelled.`);
+      setBookingToCancel(null);
     } catch {
       alert('Could not cancel booking. Please try again.');
     } finally {
-      setCancelingId(null);
+      setIsCanceling(false);
     }
   };
 
@@ -84,6 +86,32 @@ export const BookingsPage: React.FC = () => {
           <span>Refresh</span>
         </button>
       </div>
+
+      {cancelFeedback && (
+        <div
+          style={{
+            padding: '12px 18px',
+            borderRadius: 'var(--radius-control)',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: '#e6f7ec',
+            color: '#137333',
+            border: '1px solid #a8dab5',
+            fontSize: '14px',
+          }}
+        >
+          <span>{cancelFeedback}</span>
+          <button
+            type="button"
+            onClick={() => setCancelFeedback(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       <div className="panel" style={{ boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)' }}>
         {loading ? (
@@ -170,8 +198,10 @@ export const BookingsPage: React.FC = () => {
                   <button
                     className="btn-ghost"
                     type="button"
-                    disabled={cancelingId === b.id}
-                    onClick={() => handleCancel(b)}
+                    onClick={() => {
+                      setCancelFeedback(null);
+                      setBookingToCancel(b);
+                    }}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -182,7 +212,7 @@ export const BookingsPage: React.FC = () => {
                     }}
                   >
                     <XCircle size={14} />
-                    <span>{cancelingId === b.id ? 'Canceling…' : 'Cancel'}</span>
+                    <span>Cancel</span>
                   </button>
                 </div>
               </li>
@@ -190,6 +220,140 @@ export const BookingsPage: React.FC = () => {
           </ul>
         )}
       </div>
+
+      {/* Custom Cancellation Confirmation Modal Popup */}
+      {bookingToCancel && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            zIndex: 3000,
+          }}
+          onClick={() => {
+            if (!isCanceling) setBookingToCancel(null);
+          }}
+        >
+          <div
+            className="panel"
+            style={{
+              width: '100%',
+              maxWidth: '460px',
+              padding: '30px',
+              borderRadius: 'var(--radius-card)',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.2)',
+              position: 'relative',
+              textAlign: 'center',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Warning Icon Badge */}
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
+                background: '#ffedea',
+                color: '#c5221f',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+                border: '4px solid #fff0ee',
+              }}
+            >
+              <AlertTriangle size={28} />
+            </div>
+
+            <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 8px', color: 'var(--text)' }}>
+              Cancel Table Reservation?
+            </h2>
+
+            <p style={{ fontSize: '14px', color: 'var(--muted)', margin: '0 0 20px', lineHeight: 1.45 }}>
+              Are you sure you want to cancel this booking? The table will immediately be released for other diners to reserve.
+            </p>
+
+            {/* Reservation Highlight Box */}
+            <div
+              style={{
+                padding: '16px',
+                borderRadius: 'var(--radius-control)',
+                background: 'var(--ground)',
+                border: '1px solid var(--border)',
+                marginBottom: '24px',
+                textAlign: 'left',
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text)', marginBottom: 6 }}>
+                {bookingToCancel.restaurant_name}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px', color: 'var(--muted)', marginBottom: 6 }}>
+                <MapPin size={13} /> {bookingToCancel.floor_name} Floor • Table {bookingToCancel.table_label} ({bookingToCancel.capacity} seats)
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '13px', color: 'var(--accent-ink)', fontWeight: 600 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <CalendarDays size={13} /> {bookingToCancel.date}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Clock size={13} /> {bookingToCancel.time_slot}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={isCanceling}
+                onClick={() => setBookingToCancel(null)}
+                style={{
+                  flex: 1,
+                  height: '42px',
+                  borderRadius: 'var(--radius-control)',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: 'var(--text)',
+                  borderColor: 'var(--control)',
+                }}
+              >
+                Keep Booking
+              </button>
+              <button
+                type="button"
+                disabled={isCanceling}
+                onClick={confirmCancel}
+                style={{
+                  flex: 1,
+                  height: '42px',
+                  borderRadius: 'var(--radius-control)',
+                  border: 0,
+                  background: '#c5221f',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: isCanceling ? 'default' : 'pointer',
+                  opacity: isCanceling ? 0.7 : 1,
+                  boxShadow: '0 4px 14px rgba(197, 34, 31, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <XCircle size={16} />
+                <span>{isCanceling ? 'Canceling…' : 'Yes, Cancel Table'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

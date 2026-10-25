@@ -203,23 +203,38 @@ export const LoginPage: React.FC = () => {
 
           {/* Quick Demo Credentials */}
           <div style={{ marginTop: '24px', paddingTop: '18px', borderTop: '1px solid var(--rule)' }}>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 600, marginBottom: '8px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 600, marginBottom: '10px' }}>
               Quick test accounts:
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <button
                 type="button"
                 className="btn-ghost"
-                style={{ flex: 1, height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                style={{ height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 onClick={() => fillCredentials('guest', 'guest123')}
               >
-                <User size={13} /> Guest (guest123)
+                <User size={13} /> guest
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                onClick={() => fillCredentials('priya', 'priya123')}
+              >
+                <User size={13} /> priya
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                onClick={() => fillCredentials('rahul', 'rahul123')}
+              >
+                <User size={13} /> rahul
               </button>
               <button
                 type="button"
                 className="btn-ghost"
                 style={{
-                  flex: 1,
                   height: '34px',
                   fontSize: '12px',
                   display: 'flex',
@@ -228,10 +243,11 @@ export const LoginPage: React.FC = () => {
                   gap: 6,
                   color: 'var(--accent-ink)',
                   borderColor: 'var(--accent)',
+                  background: 'var(--accent-soft)',
                 }}
                 onClick={() => fillCredentials('admin', 'admin123')}
               >
-                <Shield size={13} /> Admin (admin123)
+                <Shield size={13} /> admin
               </button>
             </div>
           </div>

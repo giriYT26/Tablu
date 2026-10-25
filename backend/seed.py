@@ -27,14 +27,21 @@ def seed():
     conn = get_connection()
     conn.executescript(SCHEMA_PATH.read_text())
 
-    for username, password, is_admin in [
+    TEST_USERS = [
         ("guest", "guest123", 0),
+        ("priya", "priya123", 0),
+        ("rahul", "rahul123", 0),
         ("admin", "admin123", 1),
-    ]:
+    ]
+
+    for username, password, is_admin in TEST_USERS:
         conn.execute(
             "INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)",
             (username, hash_password(password), is_admin),
         )
+
+    user_names = [u[0] for u in TEST_USERS]
+    user_idx = 0
 
     for name, lat, lng in RESTAURANTS:
         cur = conn.execute(
@@ -67,23 +74,25 @@ def seed():
         today = date.today().isoformat()
         tomorrow = (date.today() + timedelta(days=1)).isoformat()
         for booking_date, slot, count in [
-            (today, "19:00", 6),
-            (today, "20:00", 3),
-            (tomorrow, "19:00", 4),
+            (today, "19:00", 3),
+            (today, "20:00", 2),
+            (tomorrow, "19:00", 2),
         ]:
             for seat_id in random.sample(seat_ids, count):
+                assigned_user = user_names[user_idx % len(user_names)]
+                user_idx += 1
                 conn.execute(
                     "INSERT INTO bookings (seat_id, date, time_slot, user_name) "
-                    "VALUES (?, ?, ?, 'guest')",
-                    (seat_id, booking_date, slot),
+                    "VALUES (?, ?, ?, ?)",
+                    (seat_id, booking_date, slot, assigned_user),
                 )
 
     conn.commit()
     conn.close()
     print(f"Seeded {DB_PATH}")
     print(f"  {len(RESTAURANTS)} restaurants x {len(FLOORS)} floors x {ROWS * COLS} seats")
-    print("  bookings: 6 + 3 per restaurant today, 4 tomorrow (sample data)")
-    print("  users: guest/guest123, admin/admin123")
+    print(f"  users: {', '.join([u[0] for u in TEST_USERS])}")
+    print("  bookings distributed evenly across all test accounts")
 
 
 if __name__ == "__main__":
