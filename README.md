@@ -86,22 +86,22 @@ Tablu/
 
 ### 1. Backend Setup
 
+To start the Flask backend directly:
+
 ```powershell
 cd backend
-
-# Create & activate venv (if not already created)
-python -m venv venv
-.\venv\Scripts\activate
-
-# Install dependencies
-pip install flask bcrypt
-
-# Seed database (creates backend/restaurant.db)
-python seed.py
-
-# Start Flask server (runs on port 5000)
-python app.py
+.\venv\Scripts\python.exe app.py
 ```
+
+> **Note on Initial Setup (First time only):**
+> If you are setting up fresh or recreating the database:
+> ```powershell
+> cd backend
+> python -m venv venv
+> .\venv\Scripts\python.exe -m pip install flask bcrypt
+> .\venv\Scripts\python.exe seed.py
+> .\venv\Scripts\python.exe app.py
+> ```
 
 ### 2. Frontend Setup (Development Mode with HMR)
 
