@@ -1,82 +1,139 @@
-# Restaurant Seat Booking
+# Tablu · Restaurant Seat Booking & Reservations
 
-A restaurant booking app modeled on movie-theater seat booking. Browse non-veg restaurants near you, open one, pick a floor, and choose seats on a color-coded map.
+A modern restaurant seat reservation platform modeled on cinema-style interactive seating. Diners can browse restaurants in Chennai sorted by distance, explore venue floors, view live table availability in real time, place 5-minute holds, and reserve tables. Administrators have full control over restaurant listings, floors, and table layouts.
 
+---
 
 ## Features
 
-- Restaurant list (non-veg), sorted by distance from the user
-- Search bar to filter restaurants by name
-- Restaurant page with date and time-slot picker
-- Seat map per floor: gray = free, amber = held by another diner, red = booked, blue = selected
-- Accounts: register, log in, log out (`guest / guest123`, `admin / admin123`)
-- Selecting a seat holds it for 5 minutes so nobody can snipe it while you decide
-- Booking confirmation and a "My Bookings" page with cancel
-- Admin layout editor: add floors, create/move/resize/delete tables on the grid
+- **Interactive Seat Map**: Real-time 2D floor grid showing live statuses:
+  - ⚪ **Available** (Free to select)
+  - 🔵 **Selected** (Active diner selection)
+  - 🟡 **Held** (5-minute hold protection preventing snipes)
+  - 🔴 **Booked** (Unavailable / Reserved)
+- **StaggeredMenu Navigation**: Open-source GSAP-animated menu from React Bits adapted for responsive desktop and mobile navigation.
+- **Cinematic Hero**: Upscale restaurant evening atmosphere welcoming diners.
+- **Location-Aware Sorting**: Uses the browser Geolocation API and Haversine formula to sort venues nearest-first, with fallback for Chennai downtown.
+- **Search & Category Filters**: Instant search by restaurant name and category pills (Non-veg, Veg, Cafe, etc.).
+- **5-Minute Anti-Snipe Holds**: Reserving a table locks it temporarily with a live countdown timer before final booking.
+- **User Accounts & Bcrypt Security**: Multi-user registration and login secured with `bcrypt` (12 rounds) and transparent upgrade of legacy hashes.
+  - Quick test credentials: `guest / guest123` & `admin / admin123`.
+- **My Bookings**: View upcoming reservations and cancel anytime.
+- **Admin Management (Full CRUD)**:
+  - Add, edit, and delete restaurants (with cascading floor/seat deletion).
+  - Add multiple venue floors (e.g., Ground, Rooftop, First).
+  - Visual 2D Table Editor: Add, reposition, resize capacity, or delete tables on the interactive grid.
 
-## Tech Stack (proposed)
+---
 
-| Layer    | Choice                          |
-|----------|---------------------------------|
-| Backend  | Python, Flask                   |
-| Database | SQLite                          |
-| Frontend | HTML, CSS, vanilla JavaScript   |
-| Location | Browser Geolocation API         |
+## Tech Stack
 
-The frontend is the priority. The backend exists to serve JSON and enforce booking rules.
+| Layer | Technology | Description |
+|---|---|---|
+| **Frontend** | React 19, TypeScript, Vite | Fast Single Page Application (SPA) |
+| **Animation** | GSAP 3 | StaggeredMenu drawer and entrance transitions |
+| **Routing** | React Router DOM v7 | Client-side routing with SPA fallback |
+| **Icons** | Lucide React | Clean, accessible iconography |
+| **Styling** | Vanilla CSS (`index.css`) | Design tokens from `.taste-skill` (pastel cobalt palette, Manrope typography, 20px card radius) |
+| **Backend** | Python 3, Flask | RESTful JSON API and SPA server |
+| **Security** | `bcrypt` | Industry-standard password hashing (cost factor 12) |
+| **Database** | SQLite3 (`PRAGMA foreign_keys = ON`) | Relational database with strict uniqueness constraints |
+
+---
 
 ## Project Structure
 
 ```
-RevRes/
+Tablu/
 ├── backend/
-│   ├── app.py          # Flask app and routes
-│   ├── db.py           # DB connection helpers
-│   ├── security.py     # PBKDF2 password hashing
-│   ├── schema.sql      # Table definitions
-│   ├── seed.py         # Fake restaurants, floors, seats + demo users
-│   └── restaurant.db   # Created by seed.py (gitignored)
-├── frontend/           # From Phase 2 onward
-│   ├── index.html      # Restaurant list + search
-│   ├── restaurant.html # Seat map + booking
-│   ├── bookings.html   # My bookings
-│   ├── login.html      # Login / register
-│   ├── admin.html      # Admin layout editor
-│   ├── css/
-│   └── js/
+│   ├── app.py              # Flask server, API routes, SPA static serving
+│   ├── db.py               # SQLite connection helper (foreign keys enabled)
+│   ├── security.py         # bcrypt password hashing & rehash checks
+│   ├── schema.sql          # DB schema (restaurants, floors, seats, bookings, users, holds)
+│   ├── seed.py             # Database seed data generator
+│   ├── restaurant.db       # SQLite database file
+│   └── venv/               # Python virtual environment
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Navigation.tsx                  # Global header & StaggeredMenu wrapper
+│   │   │   └── StaggeredMenu/                  # React Bits GSAP animated menu
+│   │   ├── context/
+│   │   │   └── AuthContext.tsx                 # Authentication state & session manager
+│   │   ├── pages/
+│   │   │   ├── HomePage.tsx                    # Hero, search, nearby sort, restaurant cards
+│   │   │   ├── RestaurantDetailPage.tsx        # 2D table grid, hold timer, booking action
+│   │   │   ├── BookingsPage.tsx                # User reservations & cancellation
+│   │   │   ├── LoginPage.tsx                   # Sign in & registration + quick demo credentials
+│   │   │   └── AdminPage.tsx                   # Restaurant CRUD & interactive table layout editor
+│   │   ├── App.tsx                             # Main Router component
+│   │   ├── index.css                           # Core design system tokens (.taste-skill)
+│   │   └── main.tsx                            # React entrypoint
+│   ├── public/
+│   │   └── assets/
+│   │       └── hero.jpg                        # High-resolution restaurant hero photography
+│   ├── vite.config.ts                          # Vite config with API proxy to port 5000
+│   └── package.json
 ├── README.md
 ├── ARCHITECTURE.md
 ├── WORKFLOW.md
 └── AGENT.md
 ```
 
+---
+
 ## Running Locally
 
-1. Create and activate a virtual environment:
-   `python -m venv backend\venv` then `backend\venv\Scripts\activate`
-2. Install Flask: `pip install flask`
-3. Create and seed the database:
-   `python backend\seed.py` (builds `backend/restaurant.db` from `backend/schema.sql`)
-4. Start the Flask server: `python backend\app.py`
-5. Open `http://127.0.0.1:5000/api/restaurants` in your browser — you should see JSON.
+### 1. Backend Setup
 
-## Docs
+```powershell
+cd backend
 
-- `ARCHITECTURE.md`: how the system is designed
-- `WORKFLOW.md`: build phases and daily working process
-- `AGENT.md`: rules for any AI assistant helping on this project
+# Create & activate venv (if not already created)
+python -m venv venv
+.\venv\Scripts\activate
 
-## Agent Skills Used
+# Install dependencies
+pip install flask bcrypt
 
-Two agent skills live in `C:\Users\srika\.agents\skills\` and are used on this project:
+# Seed database (creates backend/restaurant.db)
+python seed.py
 
-| Skill | Used for |
-|-------|----------|
-| `design-taste-frontend` | Art direction and quality gate for all frontend pages (`index.html`, `restaurant.html`, `bookings.html`). Deals a direction with `scripts/draw.mjs`, then `scripts/inspect.mjs` + `scripts/lint.mjs` gate every page before it counts as done. Requires Node 22+ and Chrome/Edge. |
-| `find-skills` | Discovering and installing further skills via `npx skills find <query>` / `npx skills add <pkg>` when a needed capability has no skill yet (see `AGENT.md`). |
+# Start Flask server (runs on port 5000)
+python app.py
+```
 
-The design skill's own docs: `C:\Users\srika\.agents\skills\design-taste-frontend\SKILL.md`. For the seat-map / booking screens (worked-in app screens) it applies in app mode: `references/app-screens.md` and `draw.mjs --app`.
+### 2. Frontend Setup (Development Mode with HMR)
 
-## Status
+In a new terminal:
 
-Phases 1–7 done: database + seed, restaurant list with search, seat map, real date/slot availability, booking with cancellation, location (geolocation sort with distance labels, permission-denied fallback) plus empty/error/loading and phone polish, and Phase 7 — login/multi-user sessions, 5-minute seat holds with countdown, and the admin floor-layout editor. All pages pass the design gate (lint + inspect, 0 FAIL). See `WORKFLOW.md`.
+```powershell
+cd frontend
+
+# Install npm packages
+npm install
+
+# Start Vite dev server (runs on port 5173 with proxy to backend)
+npm run dev
+```
+
+Open `http://localhost:5173` in your browser.
+
+### 3. Production Build & Serving via Flask
+
+When building for production:
+
+```powershell
+cd frontend
+npm run build
+```
+
+Flask will automatically detect `frontend/dist/` and serve the compiled single-page application at `http://127.0.0.1:5000/`.
+
+---
+
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md): Data model, API specs, security, and concurrency controls.
+- [WORKFLOW.md](WORKFLOW.md): Development phases and progress log.
+- [AGENT.md](AGENT.md): Guidelines and boundaries for AI assistants.

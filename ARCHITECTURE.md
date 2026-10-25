@@ -2,160 +2,166 @@
 
 ## 1. Overview
 
-A browser frontend talks to a Flask backend over a JSON API. The backend stores everything in SQLite.
+Tablu is built as a decoupled web application consisting of a modern React SPA frontend communicating with a lightweight Flask JSON API backend backed by an ACID-compliant SQLite relational database.
 
 ```
-Browser (HTML/CSS/JS)  <--- JSON over HTTP --->  Flask  <--->  SQLite
++-------------------------------------------------------------+
+|                     Browser Client                          |
+|  React 19 + TypeScript + Vite + GSAP (StaggeredMenu) SPA   |
++------------------------------+------------------------------+
+                               |
+                   HTTP JSON API & Static Dist
+                               |
++------------------------------v------------------------------+
+|                     Flask Backend                           |
+|       Authentication (bcrypt) · Booking Engine · Admin      |
++------------------------------+------------------------------+
+                               |
+                        Python sqlite3
+                               |
++------------------------------v------------------------------+
+|                     SQLite Database                         |
+|      restaurants · floors · seats · bookings · users · holds |
++-------------------------------------------------------------+
 ```
 
-The core idea: **Restaurant -> Floors -> Seats -> (Date + Time slot)**. A seat is not "booked" in general. It is booked for a specific date and slot.
+The fundamental relational model is:
+**Restaurant -> Floors -> Seats -> (Date + Time slot)**
+
+A seat is not booked globally; it is reserved for a specific calendar date (`YYYY-MM-DD`) and time slot (`HH:MM`).
+
+---
 
 ## 2. Data Model
 
-### restaurants
-| Column    | Notes                      |
-|-----------|----------------------------|
-| id        | primary key                |
-| name      |                            |
-| category  | "non-veg" for now          |
-| latitude  | used for distance sorting  |
-| longitude |                            |
-| image     | filename or URL            |
+### `restaurants`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PRIMARY KEY | Auto-incrementing venue ID |
+| `name` | TEXT NOT NULL | Restaurant name |
+| `category` | TEXT NOT NULL | Cuisine / category (e.g., 'Non-veg', 'North Indian', 'Cafe') |
+| `latitude` | REAL NOT NULL | Geographic latitude for distance calculation (-90 to 90) |
+| `longitude` | REAL NOT NULL | Geographic longitude (-180 to 180) |
+| `image` | TEXT | Image path or URL |
 
-### floors
-| Column        | Notes                  |
-|---------------|------------------------|
-| id            | primary key            |
-| restaurant_id | foreign key            |
-| name          | e.g. "Ground", "Rooftop" |
+### `floors`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PRIMARY KEY | Auto-incrementing floor ID |
+| `restaurant_id`| INTEGER NOT NULL | References `restaurants(id)` |
+| `name` | TEXT NOT NULL | e.g. "Ground", "First Floor", "Rooftop" |
 
-### seats
-| Column   | Notes                                  |
-|----------|----------------------------------------|
-| id       | primary key                            |
-| floor_id | foreign key                            |
-| label    | e.g. "T4"                              |
-| row      | grid position, used to draw the map    |
-| col      | grid position                          |
-| capacity | people per table                       |
+### `seats`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PRIMARY KEY | Unique seat identifier |
+| `floor_id` | INTEGER NOT NULL | References `floors(id)` |
+| `label` | TEXT NOT NULL | e.g., "T1", "A3" |
+| `row` | INTEGER NOT NULL | 2D layout row position (1-30) |
+| `col` | INTEGER NOT NULL | 2D layout column position (1-30) |
+| `capacity` | INTEGER NOT NULL | Table guest seating capacity (default 2) |
 
-### bookings
-| Column    | Notes                                |
-|-----------|--------------------------------------|
-| id        | primary key                          |
-| seat_id   | foreign key                          |
-| date      | booking date                         |
-| time_slot | e.g. "19:00"                         |
-| user_name | the session's username (no FK; login decides who owns a booking) |
+### `bookings`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PRIMARY KEY | Unique booking record ID |
+| `seat_id` | INTEGER NOT NULL | References `seats(id)` |
+| `date` | TEXT NOT NULL | ISO date `YYYY-MM-DD` |
+| `time_slot` | TEXT NOT NULL | Time string `HH:MM` |
+| `user_name` | TEXT NOT NULL | Username of diner |
 
-**Key constraint:** `UNIQUE(seat_id, date, time_slot)`. The database itself prevents double booking, even if application code has a bug or two requests arrive together.
+**Key Constraint**: `UNIQUE(seat_id, date, time_slot)` guarantees at the database level that no table can be double-booked for the same time slot, even under concurrent requests.
 
-### users
-| Column        | Notes                                   |
-|---------------|-----------------------------------------|
-| id            | primary key                             |
-| username      | unique                                  |
-| password_hash | PBKDF2-HMAC-SHA256, 260k iterations, per-user salt (`security.py`) |
-| is_admin      | 1 = may use the layout editor           |
+### `users`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PRIMARY KEY | User account ID |
+| `username` | TEXT NOT NULL UNIQUE | Lowercase alphanumeric username |
+| `password_hash`| TEXT NOT NULL | `bcrypt` hash (`$2b$12$...`) with legacy PBKDF2 backward compatibility |
+| `is_admin` | INTEGER NOT NULL | `1` = administrator (access to restaurant CRUD & layout editor), `0` = customer |
 
-Seeded accounts: `guest / guest123`, `admin / admin123`.
+### `holds`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PRIMARY KEY | Hold record ID |
+| `seat_id` | INTEGER NOT NULL | References `seats(id)` |
+| `date` | TEXT NOT NULL | Reservation date |
+| `time_slot` | TEXT NOT NULL | Reservation time slot |
+| `user_name` | TEXT NOT NULL | Diner holding the table |
+| `expires_at`| TEXT NOT NULL | UTC ISO timestamp (created + 300 seconds) |
 
-### holds
-| Column    | Notes                                            |
-|-----------|--------------------------------------------------|
-| id        | primary key                                      |
-| seat_id   | foreign key                                      |
-| date      |                                                  |
-| time_slot |                                                  |
-| user_name | who is holding                                   |
-| expires_at| UTC ISO timestamp, `created + 300s`              |
+**Key Constraint**: `UNIQUE(seat_id, date, time_slot)` ensures only one user can hold a specific seat at any given moment.
 
-**Key constraint:** `UNIQUE(seat_id, date, time_slot)` — one hold per seat per slot, exactly like bookings.
+---
 
 ## 3. Seat Status Logic
 
-For a given restaurant, date, and slot:
+When querying seat availability for a restaurant, date, and slot:
 
-- `booked` if a bookings row exists for that seat, date, and slot
-- `held` if another user's hold is active (not yet expired)
-- `free` otherwise — including your own active hold (you may re-select it)
+1. **`booked`**: A record exists in `bookings` for that seat, date, and slot.
+2. **`held`**: Another diner has an active hold (`expires_at > now`).
+3. **`free`**: No booking exists, and either no hold exists or the hold belongs to the requesting user.
 
-The backend returns `free`, `held`, or `booked`. Expired holds are cleared lazily whenever
-availability is read. The frontend adds `selected`.
+Expired holds are cleaned up automatically via `expire_holds(conn)` on read/write operations.
 
-## 4. API Design
+---
 
-| Method | Endpoint                                   | Purpose                                      |
-|--------|--------------------------------------------|----------------------------------------------|
-| GET    | `/api/me`                                  | Current session user (or 401)                |
-| POST   | `/api/register`                            | Create an account and log in                 |
-| POST   | `/api/login`                               | Log in (session cookie)                      |
-| POST   | `/api/logout`                              | End the session                              |
-| GET    | `/api/restaurants?lat=&lng=&q=`            | List restaurants, sorted by distance, filtered by name |
-| GET    | `/api/restaurants/<id>`                    | Restaurant details and its floors            |
-| GET    | `/api/restaurants/<id>/seats?date=&slot=`  | Seats grouped by floor, with status (`free` / `held` / `booked`) |
-| POST   | `/api/holds`                               | Take/release seat holds (syncs mine for that date+slot; `seats: []` releases all) |
-| POST   | `/api/bookings`                            | Book one or more seats (requires login)      |
-| GET    | `/api/bookings`                            | The logged-in user's bookings                |
-| DELETE | `/api/bookings/<id>`                       | Cancel a booking (owner or admin)            |
-| POST   | `/api/admin/restaurants/<id>/floors`       | Add a floor (admin)                          |
-| POST   | `/api/admin/floors/<id>/seats`             | Create a table (admin)                       |
-| PATCH  | `/api/admin/seats/<id>`                    | Edit label/row/col/capacity (admin)          |
-| DELETE | `/api/admin/seats/<id>`                    | Delete a table (admin)                       |
+## 4. API Endpoints
 
-Errors use clear HTTP codes: 400 bad input, 401 not logged in, 403 not admin, 404 not found,
-409 seat already taken (booked or held by someone else).
+### Authentication & Account
+| Method | Endpoint | Purpose | Access |
+|---|---|---|---|
+| `GET` | `/api/me` | Return active session user or null | Public |
+| `POST` | `/api/register` | Register new user account with bcrypt hashing | Public |
+| `POST` | `/api/login` | Authenticate with bcrypt & transparently upgrade legacy hashes | Public |
+| `POST` | `/api/logout` | Terminate session cookie | Logged In |
 
-Sessions are signed Flask cookies (`secret_key` regenerated on server start, so restarts log
-everyone out). `app.py` is the single gate: booking endpoints require a session, admin endpoints
-require `is_admin`.
+### Diners & Bookings
+| Method | Endpoint | Purpose | Access |
+|---|---|---|---|
+| `GET` | `/api/restaurants` | List restaurants (supports `?q=name` & `?lat=&lng=` Haversine sorting) | Public |
+| `GET` | `/api/restaurants/<id>` | Fetch venue info, floors, and seat coordinates | Public |
+| `GET` | `/api/restaurants/<id>/seats` | Seat availability map (`booked`, `held`, `user_holds`) for date & slot | Public |
+| `POST` | `/api/holds` | Create or sync 5-minute temporary seat hold | Logged In |
+| `POST` | `/api/bookings` | Confirm booking for selected seats in single atomic transaction | Logged In |
+| `GET` | `/api/bookings` | List active user's reservations | Logged In |
+| `DELETE` | `/api/bookings/<id>` | Cancel reservation | Owner / Admin |
 
-## 5. Frontend Design
+### Admin Management
+| Method | Endpoint | Purpose | Access |
+|---|---|---|---|
+| `POST` | `/api/admin/restaurants` | Create restaurant (creates default Ground floor) | Admin only |
+| `PATCH` | `/api/admin/restaurants/<id>` | Update restaurant name, category, coordinates, image | Admin only |
+| `DELETE` | `/api/admin/restaurants/<id>` | Cascade delete venue, floors, seats, holds, and bookings | Admin only |
+| `POST` | `/api/admin/restaurants/<id>/floors` | Add floor to restaurant | Admin only |
+| `POST` | `/api/admin/floors/<id>/seats` | Add table to floor grid | Admin only |
+| `PATCH` | `/api/admin/seats/<id>` | Edit table label, row, column, capacity | Admin only |
+| `DELETE` | `/api/admin/seats/<id>` | Remove table from floor grid | Admin only |
 
-Five pages, each with its own JS file:
+### Static SPA Serving
+- `GET /` -> Serves `frontend/dist/index.html`
+- `GET /<path:path>` -> Serves static assets if file exists; otherwise falls back to `index.html` for client-side routing.
 
-- **index**: fetches restaurants, renders cards, handles search and geolocation
-- **restaurant**: date and slot picker, floor tabs, seat grid, selection state, hold timer, confirm button
-- **bookings**: lists bookings, cancel button; redirects to login when the session ends
-- **login**: login and registration modes, `?next=` return path
-- **admin**: floor tabs, seat grid, edit/create/delete tables; guests see a gated state
+---
 
-The seat grid is built by looping over seats and placing each at its `row` and `col`. Nothing about the layout is hardcoded in HTML.
+## 5. Frontend Architecture
 
-Color states are CSS classes: `.seat.free`, `.seat.booked`, `.seat.held`, `.seat.selected`.
-A hold shows a 5-minute countdown in the confirm bar; when it expires the selection is cleared
-and the seat reloads. `js/auth.js` runs on every page and drives the rail's login/account state.
+The frontend is structured as a component-driven Single Page Application (SPA):
 
-### 5.1 Visual design process
+- **Routing & Navigation**: `react-router-dom` handles routing across `/`, `/restaurants/:id`, `/bookings`, `/login`, and `/admin`.
+- **Global Navigation Bar**: Wraps the **`<StaggeredMenu />`** component from React Bits, utilizing GSAP timelines for smooth underlay layer staggered slide-ins and text transformations.
+- **State Management**: `AuthContext.tsx` maintains session state across components and handles login, registration, and logout.
+- **Design Tokens (`.taste-skill`)**:
+  - Background: `--ground: #f3f5f7`
+  - Cards: `--surface: #ffffff`, `--radius-card: 20px`
+  - Accent: `--accent: #1d5fd6`, `--accent-soft: #dcf1ff`, `--accent-ink: #0a3a80`
+  - Typography: Manrope font with tabular figures for dates, timers, and seat numbers.
 
-The look of all three pages is decided by the `design-taste-frontend` agent skill, not improvised
-per page. These screens are *app screens* (worked in, not scrolled), so the skill runs in app mode:
-one dealt style shared by all pages (`draw.mjs --app --keep palette,type` when a brand colour/type
-is fixed), tokens as CSS custom properties, and the gate (`lint.mjs`, `inspect.mjs --app`) run
-before a page is done. The data model and API above are unaffected by the skill; it styles what
-Phase 2+ builds, it does not shape it.
+---
 
-## 6. Location Handling
+## 6. Concurrency & Security Controls
 
-1. Browser asks for permission and returns latitude and longitude.
-2. Frontend sends them to `/api/restaurants`.
-3. Backend computes distance per restaurant (Haversine formula) and sorts.
-4. If permission is denied, fall back to an unsorted list or a manual area picker.
-
-## 7. Concurrency and Integrity
-
-- Booking multiple seats in one request must be **all or nothing** (a single transaction).
-- If any seat is already taken, return 409 and book none.
-- The frontend refetches seat status before confirming, since the map may be stale.
-- A hold reserves a seat for 5 minutes so the picker is not sniped mid-decision; holds and
-  bookings share the `UNIQUE(seat_id, date, time_slot)` pattern, and booking checks both tables.
-
-## 8. Out of Scope (for now)
-
-- Deployment and hosting
-- Payments
-- Veg and other categories
-
-## 9. Future Ideas
-
-- Real map view of restaurants
+- **Atomic Transactions**: Seat reservations insert all chosen seats in a single SQLite transaction. If any seat is taken concurrently, the entire request rolls back and returns `409 Conflict`.
+- **Race Condition Prevention**: Database unique indexes `UNIQUE(seat_id, date, time_slot)` enforce integrity even during high-concurrency requests.
+- **Password Protection**: Passwords hashed with `bcrypt` using 12 salt rounds. Old PBKDF2 hashes are transparently upgraded to bcrypt on successful authentication.
+- **Session Security**: Signed Flask cookies with server-side session secrets. Admin actions require explicit verification of `is_admin == 1`.
