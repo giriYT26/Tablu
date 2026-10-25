@@ -8,7 +8,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory, session
 
 from db import get_connection
-from security import hash_password, verify_password
+from security import hash_password, needs_rehash, verify_password
 
 FRONTEND = Path(__file__).parent.parent / "frontend"
 
@@ -120,9 +120,19 @@ def login():
         "SELECT username, password_hash, is_admin FROM users WHERE username = ?",
         (username,),
     ).fetchone()
-    conn.close()
     if row is None or not verify_password(password, row["password_hash"]):
+        conn.close()
         return jsonify({"error": "wrong username or password"}), 401
+
+    # Transparently upgrade legacy PBKDF2 hashes to bcrypt
+    if needs_rehash(row["password_hash"]):
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE username = ?",
+            (hash_password(password), row["username"]),
+        )
+        conn.commit()
+
+    conn.close()
     session["user"] = row["username"]
     return jsonify({"user": {"username": row["username"], "is_admin": row["is_admin"]}})
 
@@ -509,6 +519,148 @@ def parse_admin_seat(body):
     return out, None
 
 
+def parse_restaurant(body, partial=False):
+    name = body.get("name")
+    category = body.get("category", "non-veg")
+    latitude = body.get("latitude")
+    longitude = body.get("longitude")
+    image = body.get("image", "")
+
+    out = {}
+    if not partial or "name" in body:
+        if not isinstance(name, str) or not name.strip() or len(name) > 100:
+            return None, (jsonify({"error": "name must be 1-100 characters"}), 400)
+        out["name"] = name.strip()
+
+    if not partial or "category" in body:
+        if not isinstance(category, str) or not category.strip() or len(category) > 50:
+            return None, (jsonify({"error": "category must be 1-50 characters"}), 400)
+        out["category"] = category.strip()
+
+    if not partial or "latitude" in body:
+        try:
+            lat = float(latitude)
+            if not (-90 <= lat <= 90):
+                raise ValueError()
+            out["latitude"] = lat
+        except (ValueError, TypeError):
+            return None, (jsonify({"error": "latitude must be between -90 and 90"}), 400)
+
+    if not partial or "longitude" in body:
+        try:
+            lng = float(longitude)
+            if not (-180 <= lng <= 180):
+                raise ValueError()
+            out["longitude"] = lng
+        except (ValueError, TypeError):
+            return None, (jsonify({"error": "longitude must be between -180 and 180"}), 400)
+
+    if not partial or "image" in body:
+        out["image"] = str(image).strip() if image else ""
+
+    return out, None
+
+
+@app.post("/api/admin/restaurants")
+def admin_create_restaurant():
+    _, err = require_admin()
+    if err:
+        return err
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "JSON body required"}), 400
+    fields, err = parse_restaurant(body, partial=False)
+    if err:
+        return err
+
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            "INSERT INTO restaurants (name, category, latitude, longitude, image) VALUES (?, ?, ?, ?, ?)",
+            (fields["name"], fields["category"], fields["latitude"], fields["longitude"], fields["image"]),
+        )
+        rest_id = cur.lastrowid
+        # Automatically create default 'Ground' floor
+        conn.execute("INSERT INTO floors (restaurant_id, name) VALUES (?, 'Ground')", (rest_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+
+    row = conn.execute("SELECT * FROM restaurants WHERE id = ?", (rest_id,)).fetchone()
+    conn.close()
+    return jsonify({"restaurant": dict(row)}), 201
+
+
+@app.patch("/api/admin/restaurants/<int:restaurant_id>")
+def admin_update_restaurant(restaurant_id):
+    _, err = require_admin()
+    if err:
+        return err
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not body:
+        return jsonify({"error": "JSON body with changes required"}), 400
+
+    allowed = {"name", "category", "latitude", "longitude", "image"}
+    if not set(body) <= allowed:
+        return jsonify({"error": "unknown field"}), 400
+
+    fields, err = parse_restaurant(body, partial=True)
+    if err:
+        return err
+
+    conn = get_connection()
+    existing = conn.execute("SELECT * FROM restaurants WHERE id = ?", (restaurant_id,)).fetchone()
+    if existing is None:
+        conn.close()
+        return jsonify({"error": "restaurant not found"}), 404
+
+    set_clauses = [f"{k} = ?" for k in fields]
+    values = list(fields.values()) + [restaurant_id]
+    conn.execute(f"UPDATE restaurants SET {', '.join(set_clauses)} WHERE id = ?", values)
+    conn.commit()
+    updated = conn.execute("SELECT * FROM restaurants WHERE id = ?", (restaurant_id,)).fetchone()
+    conn.close()
+    return jsonify({"restaurant": dict(updated)})
+
+
+@app.delete("/api/admin/restaurants/<int:restaurant_id>")
+def admin_delete_restaurant(restaurant_id):
+    _, err = require_admin()
+    if err:
+        return err
+
+    conn = get_connection()
+    try:
+        exists = conn.execute("SELECT 1 FROM restaurants WHERE id = ?", (restaurant_id,)).fetchone()
+        if exists is None:
+            conn.close()
+            return jsonify({"error": "restaurant not found"}), 404
+
+        floors = conn.execute("SELECT id FROM floors WHERE restaurant_id = ?", (restaurant_id,)).fetchall()
+        floor_ids = [f["id"] for f in floors]
+        if floor_ids:
+            f_placeholders = ",".join("?" * len(floor_ids))
+            seats = conn.execute(f"SELECT id FROM seats WHERE floor_id IN ({f_placeholders})", floor_ids).fetchall()
+            seat_ids = [s["id"] for s in seats]
+            if seat_ids:
+                s_placeholders = ",".join("?" * len(seat_ids))
+                conn.execute(f"DELETE FROM bookings WHERE seat_id IN ({s_placeholders})", seat_ids)
+                conn.execute(f"DELETE FROM holds WHERE seat_id IN ({s_placeholders})", seat_ids)
+                conn.execute(f"DELETE FROM seats WHERE floor_id IN ({f_placeholders})", floor_ids)
+            conn.execute(f"DELETE FROM floors WHERE id IN ({f_placeholders})", floor_ids)
+
+        conn.execute("DELETE FROM restaurants WHERE id = ?", (restaurant_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+    conn.close()
+    return "", 204
+
+
 @app.post("/api/admin/restaurants/<int:restaurant_id>/floors")
 def admin_add_floor(restaurant_id):
     _, err = require_admin()
@@ -633,14 +785,23 @@ def admin_delete_seat(seat_id):
     return "", 204
 
 
+DIST = FRONTEND / "dist"
+
+
 @app.get("/")
 def index():
-    return send_from_directory(FRONTEND, "index.html")
+    folder = DIST if DIST.exists() else FRONTEND
+    return send_from_directory(folder, "index.html")
 
 
 @app.get("/<path:path>")
 def frontend_file(path):
-    return send_from_directory(FRONTEND, path)
+    folder = DIST if DIST.exists() else FRONTEND
+    target = folder / path
+    if target.is_file():
+        return send_from_directory(folder, path)
+    return send_from_directory(folder, "index.html")
+
 
 
 if __name__ == "__main__":
