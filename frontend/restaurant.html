@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book a table · RevRes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <nav class="rail" aria-label="Main">
+    <a class="rail-mark" href="/" aria-label="RevRes home">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <circle cx="11" cy="11" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="11" cy="3" r="1.6" fill="currentColor"/>
+        <circle cx="11" cy="19" r="1.6" fill="currentColor"/>
+        <circle cx="3" cy="11" r="1.6" fill="currentColor"/>
+        <circle cx="19" cy="11" r="1.6" fill="currentColor"/>
+      </svg>
+    </a>
+    <a class="rail-item is-active" href="/" title="Restaurants">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+        <rect x="2.5" y="2.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        <rect x="10.5" y="2.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        <rect x="2.5" y="10.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        <rect x="10.5" y="10.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+      <span class="rail-label">Restaurants</span>
+    </a>
+    <a class="rail-item" href="bookings.html" title="Bookings">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+        <rect x="2.5" y="3.5" width="13" height="12" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M2.5 7.5h13M6 2v3M12 2v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span class="rail-label">Bookings</span>
+    </a>
+    <a class="rail-item" href="admin.html" title="Admin" id="rail-admin" hidden>
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+        <path d="M11.5 2.5l4 4L6 16H2v-4l9.5-9.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+      <span class="rail-label">Admin</span>
+    </a>
+    <button class="rail-item rail-account" id="rail-account" type="button">
+      <svg class="account-icon" width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+        <circle cx="9" cy="6" r="3" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M3.5 15.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span class="account-initial" hidden></span>
+      <span class="rail-label" id="rail-account-label">Log in</span>
+    </button>
+  </nav>
+
+  <main class="canvas">
+    <a class="back-link" href="/">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M7.5 2.5 4 6l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Restaurants
+    </a>
+
+    <header class="title-row">
+      <div class="title-block">
+        <h1 id="name">Restaurant</h1>
+        <p class="subline" id="subline">Loading place&hellip;</p>
+      </div>
+      <div class="controls">
+        <label class="control">
+          <span class="control-label">Date</span>
+          <input type="date" id="date">
+        </label>
+        <label class="control">
+          <span class="control-label">Time</span>
+          <select id="slot"></select>
+        </label>
+      </div>
+    </header>
+
+    <div class="tabs" id="tabs" role="tablist" aria-label="Floors" hidden></div>
+
+    <section class="panel" aria-label="Seat map" aria-live="polite">
+      <div class="panel-head" id="panel-head" hidden>
+        <div class="legend" aria-label="Seat status legend">
+          <span class="legend-item"><span class="swatch seat free" aria-hidden="true"></span>Free</span>
+          <span class="legend-item"><span class="swatch seat held" aria-hidden="true"></span>Held</span>
+          <span class="legend-item"><span class="swatch seat booked" aria-hidden="true"></span>Booked</span>
+          <span class="legend-item"><span class="swatch seat selected" aria-hidden="true"></span>Selected</span>
+        </div>
+        <p class="count num" id="count">0 selected</p>
+      </div>
+      <div class="seat-grid" id="seat-grid" role="tabpanel"></div>
+      <div class="book-bar" id="book-bar" hidden>
+        <div class="book-info">
+          <p class="book-summary" id="book-summary" hidden></p>
+          <p class="book-timer" id="book-timer" hidden></p>
+          <p class="book-notice" id="book-notice" hidden></p>
+        </div>
+        <button class="btn-primary" id="book-btn" type="button">Confirm booking</button>
+      </div>
+      <p class="empty" id="empty" hidden></p>
+    </section>
+  </main>
+
+  <script src="js/auth.js"></script>
+  <script src="js/restaurant.js"></script>
+</body>
+</html>
