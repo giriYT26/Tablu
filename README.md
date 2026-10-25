@@ -2,7 +2,6 @@
 
 A restaurant booking app modeled on movie-theater seat booking. Browse non-veg restaurants near you, open one, pick a floor, and choose seats on a color-coded map.
 
-> Learning project. Not intended for real-world deployment. It runs locally.
 
 ## Features
 
