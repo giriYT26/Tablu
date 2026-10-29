@@ -1,9 +1,20 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import StaggeredMenu from './StaggeredMenu/StaggeredMenu';
 import type { StaggeredMenuItem } from './StaggeredMenu/StaggeredMenu';
+import RouteNav from './RouteNav';
+import type { RouteNavItem } from './RouteNav';
 import { LogOut, ShieldCheck, Utensils, LogIn } from 'lucide-react';
+
+const headerNavVars = {
+  '--gn-frame': 'rgba(255, 253, 248, 0.82)',
+  '--gn-frame-edge': 'rgba(231, 220, 203, 0.85)',
+  '--gn-frame-highlight': 'rgba(255, 255, 255, 0.95)',
+  '--gn-frame-shadow': '0 6px 22px rgba(60, 38, 16, 0.06)',
+  '--gn-ink': '#1a1410',
+  '--gn-muted': '#736658',
+} as React.CSSProperties;
 
 export const Navigation: React.FC = () => {
   const { user, logout } = useAuth();
@@ -36,31 +47,30 @@ export const Navigation: React.FC = () => {
     { label: 'GitHub', link: 'https://github.com' },
   ];
 
-  const navLinks = [
+  const navItems: RouteNavItem[] = [
     { label: 'Restaurants', to: '/' },
     { label: 'My bookings', to: '/bookings' },
   ];
 
   if (user?.is_admin) {
-    navLinks.push({ label: 'Admin', to: '/admin' });
+    navItems.push({ label: 'Admin', to: '/admin' });
   }
 
   const initials = user ? user.username.slice(0, 2).toUpperCase() : '';
 
   const headerRight = (
     <div className="header-right">
-      <nav className="desk-nav" aria-label="Primary">
-        {navLinks.map((link) => (
-          <NavLink
-            key={link.to}
-            to={link.to}
-            end={link.to === '/'}
-            className={({ isActive }) => `nav-link${isActive ? ' is-active' : ''}`}
-          >
-            {link.label}
-          </NavLink>
-        ))}
-      </nav>
+      <RouteNav
+        items={navItems}
+        ariaLabel="Primary"
+        className="header-nav"
+        size="sm"
+        theme="light"
+        color="#1a1410"
+        activeTextColor="#fff8ef"
+        colors={['#b5431f', '#1a1410']}
+        style={headerNavVars}
+      />
 
       {user ? (
         <button
@@ -160,7 +170,6 @@ export const Navigation: React.FC = () => {
             <Utensils size={15} />
           </span>
           <span className="brand-word">Tablu</span>
-          <span className="brand-city">Chennai</span>
         </div>
       }
       headerChildren={headerRight}

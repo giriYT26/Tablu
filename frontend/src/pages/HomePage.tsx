@@ -167,10 +167,6 @@ export const HomePage: React.FC = () => {
         <div className="hero-overlay" aria-hidden="true" />
 
         <div className="hero-inner">
-          <span className="hero-eyebrow">
-            <span className="live-dot" />
-            Chennai · Live table availability
-          </span>
 
           <h1>
             Your table
@@ -217,13 +213,13 @@ export const HomePage: React.FC = () => {
 
           <ul className="hero-facts">
             <li>
-              <CheckCircle2 size={14} /> Real-time seat status
+              <CheckCircle2 size={16} /> Real-time seat status
             </li>
             <li>
-              <Sparkles size={14} /> Instant confirmation
+              <Sparkles size={16} /> Instant confirmation
             </li>
             <li>
-              <MapPin size={14} /> Five venues across the city
+              <MapPin size={16} /> Find venues across the city
             </li>
           </ul>
         </div>
@@ -233,7 +229,6 @@ export const HomePage: React.FC = () => {
       <main id="restaurant-list" className="shell" style={{ scrollMarginTop: '24px' }}>
         <div className="section-head">
           <div>
-            <p className="eyebrow">Handpicked in Chennai</p>
             <h2>
               {query ? (
                 <>

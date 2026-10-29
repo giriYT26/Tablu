@@ -2,11 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-  LogIn,
-  UserPlus,
   AlertCircle,
-  Shield,
-  User,
   Utensils,
   CheckCircle2,
   CalendarCheck,
@@ -52,20 +48,11 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const fillCredentials = (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
-    setError(null);
-  };
-
   return (
     <div className="auth-shell">
       {/* Editorial side panel */}
       <aside className="auth-visual" aria-hidden="true">
         <div className="auth-visual-inner">
-          <p className="hero-eyebrow" style={{ marginBottom: 18 }}>
-            <span className="live-dot" /> Tablu · Chennai
-          </p>
           <p className="auth-quote">
             The best seat in the house,
             <br />
@@ -89,9 +76,6 @@ export const LoginPage: React.FC = () => {
       <div style={{ width: '100%' }}>
         <div className="auth-card">
           <div className="auth-head">
-            <div className="auth-mark">
-              {isRegister ? <UserPlus size={23} /> : <LogIn size={23} />}
-            </div>
             <h1>{isRegister ? 'Create your account' : 'Welcome back'}</h1>
             <p>
               {isRegister
@@ -165,28 +149,6 @@ export const LoginPage: React.FC = () => {
               {submitting ? 'Please wait…' : isRegister ? 'Create account' : 'Sign in'}
             </button>
           </form>
-
-          <div className="demo-box">
-            <div className="demo-label">Try a demo account</div>
-            <div className="demo-grid">
-              <button type="button" className="demo-chip" onClick={() => fillCredentials('guest', 'guest123')}>
-                <User size={12} /> guest
-              </button>
-              <button type="button" className="demo-chip" onClick={() => fillCredentials('priya', 'priya123')}>
-                <User size={12} /> priya
-              </button>
-              <button type="button" className="demo-chip" onClick={() => fillCredentials('rahul', 'rahul123')}>
-                <User size={12} /> rahul
-              </button>
-              <button
-                type="button"
-                className="demo-chip is-admin"
-                onClick={() => fillCredentials('admin', 'admin123')}
-              >
-                <Shield size={12} /> admin
-              </button>
-            </div>
-          </div>
         </div>
 
         <div className="auth-foot">
