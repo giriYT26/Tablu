@@ -1,6 +1,18 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Calendar, Clock, CheckCircle2, AlertTriangle, ShieldAlert, Timer } from 'lucide-react';
+import {
+  ChevronLeft,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  ShieldAlert,
+  Timer,
+  CalendarDays,
+  Users,
+  Armchair,
+  UtensilsCrossed,
+  Sparkles,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface Seat {
@@ -33,10 +45,54 @@ interface RestaurantData {
 interface SeatStatusResponse {
   booked: number[];
   held: number[];
-  user_holds?: number[];
+}
+
+interface SeatStatusPayload {
+  floors?: {
+    id: number;
+    name: string;
+    seats: { id: number; status: 'free' | 'booked' | 'held' }[];
+  }[];
 }
 
 const SLOTS = ['12:00', '13:00', '14:00', '18:00', '19:00', '20:00', '21:00'];
+
+const toLocalISO = (d: Date) => {
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, '0');
+  const day = `${d.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const buildDays = () =>
+  Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + i);
+    return {
+      iso: toLocalISO(d),
+      dow: i === 0 ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' }),
+      day: d.getDate(),
+      mon: d.toLocaleDateString(undefined, { month: 'short' }),
+    };
+  });
+
+const slotLabel = (slot: string) => {
+  const [h, m] = slot.split(':').map(Number);
+  const suffix = h >= 12 ? 'pm' : 'am';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${`${m}`.padStart(2, '0')} ${suffix}`;
+};
+
+const friendlyDate = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+};
 
 export const RestaurantDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -49,8 +105,8 @@ export const RestaurantDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Booking filters
-  const today = new Date().toISOString().split('T')[0];
-  const [date, setDate] = useState(today);
+  const days = useMemo(buildDays, []);
+  const [date, setDate] = useState(days[0].iso);
   const [slot, setSlot] = useState('19:00');
 
   // Seats status
@@ -59,10 +115,10 @@ export const RestaurantDetailPage: React.FC = () => {
   const [bookingInProgress, setBookingInProgress] = useState(false);
   const [notice, setNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
-  // Hold Timer
+  // Hold timer
   const [holdExpiresAt, setHoldExpiresAt] = useState<number | null>(null);
   const [timerText, setTimerText] = useState<string>('');
-  const timerIntervalRef = useRef<any>(null);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Fetch restaurant basic info & seats
   useEffect(() => {
@@ -91,21 +147,23 @@ export const RestaurantDetailPage: React.FC = () => {
     try {
       const res = await fetch(`/api/restaurants/${id}/seats?date=${date}&slot=${slot}`);
       if (res.ok) {
-        const data: SeatStatusResponse = await res.json();
-        setSeatStatuses(data);
+        const data: SeatStatusPayload = await res.json();
+        // The API groups seats by floor and reports a status per table.
+        const booked: number[] = [];
+        const held: number[] = [];
+        (data.floors ?? []).forEach((floor) => {
+          floor.seats.forEach((seat) => {
+            if (seat.status === 'booked') booked.push(seat.id);
+            if (seat.status === 'held') held.push(seat.id);
+          });
+        });
+        setSeatStatuses({ booked, held });
       }
     } catch {
-      // ignore
+      // ignore network hiccups — the map simply keeps its last state
     }
   };
 
-  useEffect(() => {
-    loadSeatStatuses();
-    setSelectedSeatIds([]);
-    stopHoldTimer();
-  }, [id, date, slot]);
-
-  // Hold countdown handler
   const stopHoldTimer = () => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     timerIntervalRef.current = null;
@@ -113,6 +171,14 @@ export const RestaurantDetailPage: React.FC = () => {
     setTimerText('');
   };
 
+  useEffect(() => {
+    loadSeatStatuses();
+    setSelectedSeatIds([]);
+    stopHoldTimer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, date, slot]);
+
+  // Hold countdown handler
   useEffect(() => {
     if (!holdExpiresAt) {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -129,18 +195,21 @@ export const RestaurantDetailPage: React.FC = () => {
       } else {
         const m = Math.floor(diff / 60);
         const s = diff % 60;
-        setTimerText(`Held for ${m}:${s < 10 ? '0' + s : s}`);
+        setTimerText(`${m}:${s < 10 ? '0' + s : s}`);
       }
     };
 
     tick();
     timerIntervalRef.current = setInterval(tick, 1000);
-    return () => clearInterval(timerIntervalRef.current);
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [holdExpiresAt]);
 
   // Sync hold with server
   const syncHoldWithServer = async (seatIds: number[]) => {
-    if (!user) return; // Unauthenticated users don't hold on server until login
+    if (!user) return; // Unauthenticated users don't hold on the server until login
     try {
       const res = await fetch('/api/holds', {
         method: 'POST',
@@ -179,7 +248,6 @@ export const RestaurantDetailPage: React.FC = () => {
   const handleBook = async () => {
     if (selectedSeatIds.length === 0) return;
     if (!user) {
-      // Save pending booking info to redirect back after login
       navigate(`/login?next=${encodeURIComponent(`/restaurants/${id}`)}`);
       return;
     }
@@ -207,9 +275,10 @@ export const RestaurantDetailPage: React.FC = () => {
         await loadSeatStatuses();
         setNotice({
           type: 'error',
-          text: errData.error === 'seat held by someone else'
-            ? 'Another diner is currently holding those tables.'
-            : 'Those tables were just booked by someone else. The map has updated.',
+          text:
+            errData.error === 'seat held by someone else'
+              ? 'Another diner is currently holding those tables. The map has refreshed.'
+              : 'Those tables were just booked by someone else. The map has refreshed.',
         });
         return;
       }
@@ -229,21 +298,25 @@ export const RestaurantDetailPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="canvas">
-        <div className="skeleton" style={{ height: 120, borderRadius: 20 }} />
+      <div className="canvas booking-page">
+        <div className="skeleton-bar" style={{ width: 120, height: 14 }} />
+        <div className="skeleton-bar" style={{ width: '42%', height: 46, marginTop: 22 }} />
+        <div className="panel" style={{ height: 260, marginTop: 32 }} />
       </div>
     );
   }
 
   if (error || !restaurantData) {
     return (
-      <div className="canvas">
-        <div className="panel" style={{ padding: 32, textAlign: 'center' }}>
-          <ShieldAlert size={32} color="#c5221f" style={{ margin: '0 auto 12px' }} />
-          <h3>Could not load restaurant</h3>
-          <p style={{ color: 'var(--muted)', marginBottom: 20 }}>{error || 'Restaurant not found'}</p>
-          <Link to="/" className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            Back to Restaurants
+      <div className="canvas booking-page">
+        <div className="empty-state">
+          <span className="empty-icon">
+            <ShieldAlert size={24} />
+          </span>
+          <h3>We couldn’t open this restaurant</h3>
+          <p>{error || 'Restaurant not found.'}</p>
+          <Link to="/" className="btn-primary">
+            <ChevronLeft size={15} /> Back to restaurants
           </Link>
         </div>
       </div>
@@ -261,219 +334,247 @@ export const RestaurantDetailPage: React.FC = () => {
   const gridCols = Math.max(maxCol, 4);
 
   return (
-    <div className="canvas">
-      {/* Top Breadcrumb Back */}
+    <div className="canvas booking-page">
       <Link to="/" className="back-link">
-        <ChevronLeft size={16} /> All restaurants
+        <ChevronLeft size={15} /> All restaurants
       </Link>
 
-      {/* Header Info */}
-      <div className="title-row" style={{ flexWrap: 'wrap', gap: 20 }}>
+      {/* Header */}
+      <header className="venue-header">
         <div>
+          <p className="eyebrow">{restaurant.category} · Chennai</p>
           <h1>{restaurant.name}</h1>
-          <p className="subline">
-            {restaurant.category} · {floors.length} {floors.length === 1 ? 'floor' : 'floors'} · {seats.length} tables
+          <p className="venue-meta">
+            <Armchair size={14} /> {seats.length} tables
+            <span className="dot">•</span>
+            <UtensilsCrossed size={14} /> {floors.length} {floors.length === 1 ? 'floor' : 'floors'}
+            <span className="dot">•</span>
+            <Clock size={14} /> Lunch & dinner service
           </p>
         </div>
+        <span className="live-badge">Live availability</span>
+      </header>
 
-        {/* Date and Time Slot Controls */}
-        <div className="controls">
-          <div className="control">
-            <label className="control-label" htmlFor="date-select">
-              <Calendar size={13} style={{ display: 'inline', marginRight: 4 }} />
-              Date
-            </label>
-            <input
-              id="date-select"
-              type="date"
-              value={date}
-              min={today}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
-
-          <div className="control">
-            <label className="control-label" htmlFor="slot-select">
-              <Clock size={13} style={{ display: 'inline', marginRight: 4 }} />
-              Time Slot
-            </label>
-            <select id="slot-select" value={slot} onChange={(e) => setSlot(e.target.value)}>
-              {SLOTS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
+      {/* Date + time */}
+      <section className="booking-steps" aria-label="Choose date and time">
+        <div className="step">
+          <span className="step-n">1</span>
+          <div className="step-body">
+            <span className="step-label">Choose a date</span>
+            <div className="day-strip">
+              {days.map((d) => (
+                <button
+                  key={d.iso}
+                  type="button"
+                  className={`day-chip${date === d.iso ? ' is-active' : ''}`}
+                  onClick={() => setDate(d.iso)}
+                  aria-pressed={date === d.iso}
+                >
+                  <span className="dow">{d.dow}</span>
+                  <span className="dnum">{d.day}</span>
+                  <span className="dmon">{d.mon}</span>
+                </button>
               ))}
-            </select>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Notice Message */}
+        <div className="step">
+          <span className="step-n">2</span>
+          <div className="step-body">
+            <span className="step-label">Choose a time</span>
+            <div className="slot-strip">
+              {SLOTS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`slot-chip${slot === s ? ' is-active' : ''}`}
+                  onClick={() => setSlot(s)}
+                  aria-pressed={slot === s}
+                >
+                  {slotLabel(s)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {notice && (
-        <div
-          style={{
-            padding: '12px 16px',
-            borderRadius: 'var(--radius-control)',
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            background: notice.type === 'error' ? '#ffedea' : '#e6f7ec',
-            color: notice.type === 'error' ? '#831c1e' : '#137333',
-            border: `1px solid ${notice.type === 'error' ? '#f0c2bd' : '#a8dab5'}`,
-            fontSize: '14px',
-          }}
-        >
-          {notice.type === 'error' ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+        <div className={`notice ${notice.type === 'error' ? 'is-error' : 'is-success'}`} style={{ marginBottom: 20 }}>
+          {notice.type === 'error' ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
           <span>{notice.text}</span>
         </div>
       )}
 
-      {/* Floor Tabs */}
-      {floors.length > 1 && (
-        <div className="tabs">
-          {floors.map((f) => (
-            <button
-              key={f.id}
-              className="tab"
-              aria-selected={activeFloorId === f.id}
-              onClick={() => {
-                setActiveFloorId(f.id);
-                setNotice(null);
-              }}
-            >
-              {f.name} Floor
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="booking-layout">
+        {/* Floor plan */}
+        <section className="panel seat-panel" aria-label="Table availability">
+          <div className="panel-head">
+            <div className="legend">
+              <span className="legend-item">
+                <span className="swatch seat free" /> Available
+              </span>
+              <span className="legend-item">
+                <span className="swatch seat selected" /> Selected
+              </span>
+              <span className="legend-item">
+                <span className="swatch seat booked" /> Booked
+              </span>
+              <span className="legend-item">
+                <span className="swatch seat held" /> On hold
+              </span>
+            </div>
 
-      {/* Interactive Seat Grid Panel */}
-      <div className="panel" style={{ boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)' }}>
-        {/* Panel Header with Legend */}
-        <div className="panel-head">
-          <div className="legend">
-            <div className="legend-item">
-              <div className="swatch seat free" style={{ width: 14, height: 14 }} />
-              <span>Available</span>
-            </div>
-            <div className="legend-item">
-              <div className="swatch seat selected" style={{ width: 14, height: 14 }} />
-              <span>Selected</span>
-            </div>
-            <div className="legend-item">
-              <div className="swatch seat booked" style={{ width: 14, height: 14 }} />
-              <span>Booked</span>
-            </div>
-            <div className="legend-item">
-              <div className="swatch seat held" style={{ width: 14, height: 14 }} />
-              <span>Held</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {timerText && (
+                <span className="hold-timer">
+                  <Timer size={12} /> {timerText}
+                </span>
+              )}
+              <span className="count">
+                {selectedSeatIds.length} {selectedSeatIds.length === 1 ? 'table' : 'tables'} selected
+              </span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {timerText && (
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  padding: '4px 8px',
-                  background: 'var(--accent-soft)',
-                  color: 'var(--accent-ink)',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 700,
+          <div className="floor-tabs" role="tablist" aria-label="Floors">
+            {floors.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                role="tab"
+                className="floor-tab"
+                aria-selected={activeFloorId === f.id}
+                onClick={() => {
+                  setActiveFloorId(f.id);
+                  setNotice(null);
                 }}
               >
-                <Timer size={13} /> {timerText}
-              </span>
-            )}
-            <span className="count" style={{ color: 'var(--muted)', fontSize: '14px', fontWeight: 600 }}>
-              {selectedSeatIds.length} selected
-            </span>
+                {f.name} floor
+              </button>
+            ))}
           </div>
-        </div>
 
-        {/* Seat Grid */}
-        {floorSeats.length === 0 ? (
-          <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)' }}>
-            No tables set up for {currentFloor?.name || 'this'} floor yet.
+          {floorSeats.length === 0 ? (
+            <div className="seat-grid-empty">
+              <strong>Nothing on this floor yet</strong>
+              No tables have been set up for {currentFloor?.name || 'this floor'}.
+            </div>
+          ) : (
+            <div
+              className="seat-grid"
+              style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+            >
+              {floorSeats.map((seat) => {
+                const isSelected = selectedSeatIds.includes(seat.id);
+                const isBooked = seatStatuses.booked?.includes(seat.id);
+                const isHeld = seatStatuses.held?.includes(seat.id);
+
+                let statusClass = 'free';
+                if (isSelected) statusClass = 'selected';
+                else if (isBooked) statusClass = 'booked';
+                else if (isHeld) statusClass = 'held';
+
+                const isDisabled = isBooked || isHeld;
+
+                return (
+                  <button
+                    key={seat.id}
+                    type="button"
+                    className={`seat ${statusClass}`}
+                    style={{ gridRow: seat.row, gridColumn: seat.col }}
+                    disabled={isDisabled}
+                    onClick={() => handleSeatClick(seat)}
+                    aria-pressed={isSelected}
+                    title={`Table ${seat.label} · ${seat.capacity} seats · ${statusClass}`}
+                  >
+                    <span className="seat-label">{seat.label}</span>
+                    <span className="seat-cap">{seat.capacity} seats</span>
+                    <span className="seat-pips" aria-hidden="true">
+                      {Array.from({ length: Math.min(seat.capacity, 6) }).map((_, i) => (
+                        <i key={i} />
+                      ))}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Summary */}
+        <aside className="summary" aria-label="Reservation summary">
+          <div className="summary-head">
+            <p className="eyebrow">Step 3</p>
+            <h2>Your reservation</h2>
+            <p>
+              {restaurant.name} · {currentFloor?.name || 'Ground'} floor
+            </p>
           </div>
-        ) : (
-          <div
-            className="seat-grid"
-            style={{
-              gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
-            }}
-          >
-            {floorSeats.map((seat) => {
-              const isSelected = selectedSeatIds.includes(seat.id);
-              const isBooked = seatStatuses.booked?.includes(seat.id);
-              const isHeld = seatStatuses.held?.includes(seat.id);
 
-              let statusClass = 'free';
-              if (isSelected) statusClass = 'selected';
-              else if (isBooked) statusClass = 'booked';
-              else if (isHeld) statusClass = 'held';
-
-              const isDisabled = isBooked || isHeld;
-
-              return (
-                <button
-                  key={seat.id}
-                  type="button"
-                  className={`seat ${statusClass}`}
-                  style={{
-                    gridRow: seat.row,
-                    gridColumn: seat.col,
-                  }}
-                  disabled={isDisabled}
-                  onClick={() => handleSeatClick(seat)}
-                  aria-pressed={isSelected}
-                  title={`Table ${seat.label} (${seat.capacity} seats) - ${statusClass}`}
-                >
-                  <span className="seat-label" style={{ fontWeight: 700 }}>
-                    {seat.label}
-                  </span>
-                  <span className="seat-cap">
-                    {seat.capacity} {seat.capacity === 1 ? 'seat' : 'seats'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Booking Action Bar */}
-        {selectedSeatIds.length > 0 && (
-          <div className="book-bar" style={{ background: '#fafbfc' }}>
-            <div className="book-info">
-              <div className="book-summary" style={{ fontSize: '15px', fontWeight: 600 }}>
-                {selectedSeatIds.length} {selectedSeatIds.length === 1 ? 'table' : 'tables'} selected ({totalCapacity} guests)
-              </div>
-              <div style={{ fontSize: '13px', color: 'var(--muted)' }}>
-                {date} at {slot}
-              </div>
+          <div className="summary-body">
+            <div className="summary-row">
+              <span>Date</span>
+              <strong>{friendlyDate(date)}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Time</span>
+              <strong>{slotLabel(slot)}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Tables</span>
+              {selectedSeats.length ? (
+                <span className="summary-tables">
+                  {selectedSeats.map((s) => (
+                    <span className="table-pill" key={s.id}>
+                      {s.label}
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <strong style={{ color: 'var(--muted-2)', fontWeight: 600 }}>—</strong>
+              )}
             </div>
 
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={bookingInProgress}
-              onClick={handleBook}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '0 24px',
-              }}
-            >
-              {bookingInProgress ? 'Reserving…' : user ? 'Confirm Reservation' : 'Sign in to Reserve'}
-            </button>
+            {selectedSeats.length ? (
+              <>
+                <div className="summary-total">
+                  <span>Party size</span>
+                  <strong>
+                    {totalCapacity} <small>{totalCapacity === 1 ? 'guest' : 'guests'}</small>
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={bookingInProgress}
+                  onClick={handleBook}
+                >
+                  {bookingInProgress ? 'Reserving…' : user ? 'Confirm reservation' : 'Sign in to reserve'}
+                  {!bookingInProgress && <Sparkles size={15} />}
+                </button>
+
+                <p className="summary-note">
+                  Your table is held for a few minutes while you finish. Cancel free from My bookings.
+                </p>
+              </>
+            ) : (
+              <div className="summary-empty">
+                <CalendarDays size={22} />
+                <div>
+                  Pick a table on the floor plan to see your party size and confirm the booking.
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </aside>
       </div>
+
+      <p className="summary-note" style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 22 }}>
+        <Users size={13} /> Tables are sized for 2–6 guests. Larger group? Combine two adjacent tables.
+      </p>
     </div>
   );
 };

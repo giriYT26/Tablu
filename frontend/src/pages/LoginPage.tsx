@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, UserPlus, AlertCircle, Shield, User } from 'lucide-react';
+import {
+  LogIn,
+  UserPlus,
+  AlertCircle,
+  Shield,
+  User,
+  Utensils,
+  CheckCircle2,
+  CalendarCheck,
+  Sparkles,
+} from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const [isRegister, setIsRegister] = useState(false);
@@ -49,111 +59,78 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="canvas" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '100%', maxWidth: '440px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: '16px',
-              background: 'linear-gradient(135deg, #1d5fd6, #0a3a80)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 16px',
-              boxShadow: '0 8px 20px rgba(29, 95, 214, 0.25)',
-            }}
-          >
-            {isRegister ? <UserPlus size={26} /> : <LogIn size={26} />}
-          </div>
-          <h1 style={{ fontSize: '26px', fontWeight: 700, margin: '0 0 6px', color: 'var(--text)' }}>
-            {isRegister ? 'Create an account' : 'Welcome back'}
-          </h1>
-          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '14px' }}>
-            {isRegister ? 'Join Tablu to reserve seats and manage bookings' : 'Log in to continue reserving tables'}
+    <div className="auth-shell">
+      {/* Editorial side panel */}
+      <aside className="auth-visual" aria-hidden="true">
+        <div className="auth-visual-inner">
+          <p className="hero-eyebrow" style={{ marginBottom: 18 }}>
+            <span className="live-dot" /> Tablu · Chennai
           </p>
+          <p className="auth-quote">
+            The best seat in the house,
+            <br />
+            <em>reserved in seconds.</em>
+          </p>
+          <ul className="auth-perks">
+            <li>
+              <CalendarCheck size={16} /> Pick the exact table, not just a time
+            </li>
+            <li>
+              <CheckCircle2 size={16} /> Live availability across every floor
+            </li>
+            <li>
+              <Sparkles size={16} /> Instant confirmation, free cancellation
+            </li>
+          </ul>
         </div>
+      </aside>
 
-        {/* Tab Switcher */}
-        <div
-          style={{
-            display: 'flex',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-control)',
-            padding: '4px',
-            marginBottom: '1.5rem',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegister(false);
-              setError(null);
-            }}
-            style={{
-              flex: 1,
-              padding: '8px',
-              border: 0,
-              borderRadius: '8px',
-              background: !isRegister ? 'var(--accent-soft)' : 'transparent',
-              color: !isRegister ? 'var(--accent-ink)' : 'var(--muted)',
-              fontWeight: 600,
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegister(true);
-              setError(null);
-            }}
-            style={{
-              flex: 1,
-              padding: '8px',
-              border: 0,
-              borderRadius: '8px',
-              background: isRegister ? 'var(--accent-soft)' : 'transparent',
-              color: isRegister ? 'var(--accent-ink)' : 'var(--muted)',
-              fontWeight: 600,
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            Register
-          </button>
-        </div>
+      {/* Form */}
+      <div style={{ width: '100%' }}>
+        <div className="auth-card">
+          <div className="auth-head">
+            <div className="auth-mark">
+              {isRegister ? <UserPlus size={23} /> : <LogIn size={23} />}
+            </div>
+            <h1>{isRegister ? 'Create your account' : 'Welcome back'}</h1>
+            <p>
+              {isRegister
+                ? 'One account for every table you book.'
+                : 'Sign in to reserve tables and manage your plans.'}
+            </p>
+          </div>
 
-        {/* Auth Form Card */}
-        <div className="panel" style={{ padding: '28px', boxShadow: '0 4px 24px rgba(0, 0, 0, 0.05)' }}>
-          {error && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '10px 14px',
-                background: '#ffedea',
-                color: '#831c1e',
-                border: '1px solid #f0c2bd',
-                borderRadius: 'var(--radius-control)',
-                fontSize: '13px',
-                marginBottom: '1.25rem',
+          <div className="segmented" role="group" aria-label="Sign in or register">
+            <button
+              type="button"
+              aria-pressed={!isRegister}
+              onClick={() => {
+                setIsRegister(false);
+                setError(null);
               }}
             >
+              Sign in
+            </button>
+            <button
+              type="button"
+              aria-pressed={isRegister}
+              onClick={() => {
+                setIsRegister(true);
+                setError(null);
+              }}
+            >
+              Register
+            </button>
+          </div>
+
+          {error && (
+            <div className="auth-error" style={{ marginBottom: 18 }}>
               <AlertCircle size={16} />
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <form onSubmit={handleSubmit} className="auth-form">
             <div className="control">
               <label className="control-label" htmlFor="username">
                 Username
@@ -184,78 +161,38 @@ export const LoginPage: React.FC = () => {
               />
             </div>
 
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={submitting}
-              style={{
-                height: '44px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '15px',
-                marginTop: '6px',
-              }}
-            >
-              {submitting ? 'Please wait…' : isRegister ? 'Create Account' : 'Sign In'}
+            <button type="submit" className="btn-primary" disabled={submitting}>
+              {submitting ? 'Please wait…' : isRegister ? 'Create account' : 'Sign in'}
             </button>
           </form>
 
-          {/* Quick Demo Credentials */}
-          <div style={{ marginTop: '24px', paddingTop: '18px', borderTop: '1px solid var(--rule)' }}>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 600, marginBottom: '10px' }}>
-              Quick test accounts:
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{ height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                onClick={() => fillCredentials('guest', 'guest123')}
-              >
-                <User size={13} /> guest
+          <div className="demo-box">
+            <div className="demo-label">Try a demo account</div>
+            <div className="demo-grid">
+              <button type="button" className="demo-chip" onClick={() => fillCredentials('guest', 'guest123')}>
+                <User size={12} /> guest
+              </button>
+              <button type="button" className="demo-chip" onClick={() => fillCredentials('priya', 'priya123')}>
+                <User size={12} /> priya
+              </button>
+              <button type="button" className="demo-chip" onClick={() => fillCredentials('rahul', 'rahul123')}>
+                <User size={12} /> rahul
               </button>
               <button
                 type="button"
-                className="btn-ghost"
-                style={{ height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                onClick={() => fillCredentials('priya', 'priya123')}
-              >
-                <User size={13} /> priya
-              </button>
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{ height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                onClick={() => fillCredentials('rahul', 'rahul123')}
-              >
-                <User size={13} /> rahul
-              </button>
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{
-                  height: '34px',
-                  fontSize: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  color: 'var(--accent-ink)',
-                  borderColor: 'var(--accent)',
-                  background: 'var(--accent-soft)',
-                }}
+                className="demo-chip is-admin"
                 onClick={() => fillCredentials('admin', 'admin123')}
               >
-                <Shield size={13} /> admin
+                <Shield size={12} /> admin
               </button>
             </div>
           </div>
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
-          <Link to="/" style={{ color: 'var(--muted)', fontSize: '13px', textDecoration: 'none' }}>
-            ← Back to restaurants
+        <div className="auth-foot">
+          <Link to="/">
+            <Utensils size={12} style={{ verticalAlign: '-2px', marginRight: 5 }} />
+            Back to restaurants
           </Link>
         </div>
       </div>

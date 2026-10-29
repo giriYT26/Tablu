@@ -1,9 +1,9 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import StaggeredMenu from './StaggeredMenu/StaggeredMenu';
 import type { StaggeredMenuItem } from './StaggeredMenu/StaggeredMenu';
-import { User, LogOut, ShieldCheck, Utensils } from 'lucide-react';
+import { LogOut, ShieldCheck, Utensils, LogIn } from 'lucide-react';
 
 export const Navigation: React.FC = () => {
   const { user, logout } = useAuth();
@@ -36,70 +36,111 @@ export const Navigation: React.FC = () => {
     { label: 'GitHub', link: 'https://github.com' },
   ];
 
-  const handleLogoClick = () => {
-    navigate('/');
-  };
+  const navLinks = [
+    { label: 'Restaurants', to: '/' },
+    { label: 'My bookings', to: '/bookings' },
+  ];
 
-  const userBadge = user ? (
+  if (user?.is_admin) {
+    navLinks.push({ label: 'Admin', to: '/admin' });
+  }
+
+  const initials = user ? user.username.slice(0, 2).toUpperCase() : '';
+
+  const headerRight = (
+    <div className="header-right">
+      <nav className="desk-nav" aria-label="Primary">
+        {navLinks.map((link) => (
+          <NavLink
+            key={link.to}
+            to={link.to}
+            end={link.to === '/'}
+            className={({ isActive }) => `nav-link${isActive ? ' is-active' : ''}`}
+          >
+            {link.label}
+          </NavLink>
+        ))}
+      </nav>
+
+      {user ? (
+        <button
+          type="button"
+          className="user-chip"
+          onClick={() => navigate(user.is_admin ? '/admin' : '/bookings')}
+          title={user.is_admin ? 'Admin account' : 'View your bookings'}
+        >
+          <span className={`avatar${user.is_admin ? ' is-admin' : ''}`}>
+            {user.is_admin ? <ShieldCheck size={13} /> : initials}
+          </span>
+          <span>{user.username}</span>
+          {user.is_admin ? <span className="badge-admin">ADMIN</span> : null}
+        </button>
+      ) : (
+        <button type="button" className="btn-signin" onClick={() => navigate('/login')}>
+          <LogIn size={14} />
+          <span>Sign in</span>
+        </button>
+      )}
+    </div>
+  );
+
+  const panelHeader = user ? (
     <div
-      onClick={() => navigate(user.is_admin ? '/admin' : '/bookings')}
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '6px',
-        padding: '6px 12px',
-        background: 'rgba(255, 255, 255, 0.9)',
-        backdropFilter: 'blur(8px)',
-        borderRadius: '999px',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
+        background: 'var(--surface-2)',
         border: '1px solid var(--border)',
-        fontSize: '13px',
-        fontWeight: 600,
-        color: 'var(--text)',
-        cursor: 'pointer',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        borderRadius: 'var(--radius-control)',
       }}
-      title={user.is_admin ? 'Admin user' : 'Logged in'}
     >
-      {user.is_admin ? <ShieldCheck size={14} color="#1d5fd6" /> : <User size={14} color="#5c6064" />}
-      <span>{user.username}</span>
-      {user.is_admin ? (
-        <span
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div
           style={{
-            fontSize: '10px',
-            background: '#dcf1ff',
-            color: '#0a3a80',
-            padding: '2px 6px',
-            borderRadius: '999px',
-            fontWeight: 700,
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            background: user.is_admin ? 'var(--ink)' : 'var(--accent-soft)',
+            color: user.is_admin ? '#fff3e6' : 'var(--accent-ink)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 800,
+            fontSize: '12px',
           }}
         >
-          ADMIN
-        </span>
-      ) : null}
+          {user.is_admin ? <ShieldCheck size={16} /> : initials}
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--ink)' }}>{user.username}</div>
+          <div style={{ fontSize: '11.5px', color: 'var(--muted)' }}>
+            {user.is_admin ? 'Administrator' : 'Diner'}
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={async () => {
+          await logout();
+          navigate('/');
+        }}
+        style={{
+          background: 'none',
+          border: 0,
+          color: 'var(--muted)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          padding: 6,
+        }}
+        title="Sign out"
+      >
+        <LogOut size={16} />
+      </button>
     </div>
-  ) : (
-    <button
-      onClick={() => navigate('/login')}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        padding: '7px 14px',
-        background: 'rgba(255, 255, 255, 0.9)',
-        backdropFilter: 'blur(8px)',
-        borderRadius: '999px',
-        border: '1px solid var(--border)',
-        fontSize: '13px',
-        fontWeight: 600,
-        color: 'var(--accent)',
-        cursor: 'pointer',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-      }}
-    >
-      <User size={14} />
-      <span>Sign In</span>
-    </button>
-  );
+  ) : null;
 
   return (
     <StaggeredMenu
@@ -108,102 +149,22 @@ export const Navigation: React.FC = () => {
       socialItems={socialItems}
       displaySocials={true}
       displayItemNumbering={true}
-      colors={['#dcf1ff', '#1d5fd6']}
-      accentColor="#1d5fd6"
+      colors={['#f8e6d7', '#b5431f']}
+      accentColor="#b5431f"
       isFixed={true}
+      menuButtonColor="#1a1410"
+      openMenuButtonColor="#fff8ef"
       logoElement={
-        <div
-          onClick={handleLogoClick}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            padding: '6px 14px',
-            background: 'rgba(255, 255, 255, 0.85)',
-            backdropFilter: 'blur(8px)',
-            borderRadius: '999px',
-            border: '1px solid var(--border)',
-            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.04)',
-          }}
-        >
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              background: '#1d5fd6',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-            }}
-          >
+        <div className="brand" onClick={() => navigate('/')}>
+          <span className="brand-mark">
             <Utensils size={15} />
-          </div>
-          <span style={{ fontWeight: 800, fontSize: '18px', letterSpacing: '-0.02em', color: '#1b1d1f' }}>
-            Tablu
           </span>
+          <span className="brand-word">Tablu</span>
+          <span className="brand-city">Chennai</span>
         </div>
       }
-      headerChildren={userBadge}
-      panelHeader={
-        user && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 16px',
-              background: 'var(--ground)',
-              borderRadius: 'var(--radius-control)',
-              marginBottom: '1.5rem',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: '50%',
-                  background: 'var(--accent-soft)',
-                  color: 'var(--accent-ink)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '14px',
-                }}
-              >
-                {user.username.slice(0, 2).toUpperCase()}
-              </div>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>{user.username}</div>
-                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                  {user.is_admin ? 'Administrator' : 'Customer'}
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={async () => {
-                await logout();
-                navigate('/');
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--muted)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                padding: 4,
-              }}
-              title="Logout"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        )
-      }
+      headerChildren={headerRight}
+      panelHeader={panelHeader}
     />
   );
 };
